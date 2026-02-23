@@ -12,9 +12,9 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.index.IndexRequest;
-import org.opensearch.action.index.IndexResponse;
 import org.opensearch.client.RequestOptions;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.RestHighLevelClient;
@@ -70,12 +70,12 @@ public class OpenSearchConsumer {
     public static void main(String[] args) {
         Logger logger = LoggerFactory.getLogger(OpenSearchConsumer.class.getSimpleName());
 
-        RestHighLevelClient restHighLevelClient = createOpenSearchClient();
+        RestHighLevelClient openSearchClient = createOpenSearchClient();
 
         KafkaConsumer<String,String> consumer = createKafkaConsumer();
 
-        try (restHighLevelClient; consumer) {
-            if (restHighLevelClient.indices().exists(new GetIndexRequest(OPENSEARCH_INDEX), RequestOptions.DEFAULT)) {
+        try (openSearchClient; consumer) {
+            if (openSearchClient.indices().exists(new GetIndexRequest(OPENSEARCH_INDEX), RequestOptions.DEFAULT)) {
                 logger.info("The Wikimedia index already exists!");
             } else {
                 CreateIndexRequest createIndexRequest =  new CreateIndexRequest(OPENSEARCH_INDEX);
@@ -91,23 +91,31 @@ public class OpenSearchConsumer {
                 int recordCount = records.count();
                 logger.info("Received " + recordCount + " record(s)");
 
+                BulkRequest bulkRequest = new BulkRequest();
+
                 for (ConsumerRecord<String, String> record: records) {
 
                     String id  = extractId(record.value());
 
                     IndexRequest indexRequest = new IndexRequest(OPENSEARCH_INDEX).source(record.value(), XContentType.JSON).id(id);
 
-                    IndexResponse indexResponse = createOpenSearchClient().index(indexRequest, RequestOptions.DEFAULT);
+//                    IndexResponse indexResponse = createOpenSearchClient().index(indexRequest, RequestOptions.DEFAULT);
+//                    logger.info("Inserted document with id " + indexResponse.getId() +" in the index " + OPENSEARCH_INDEX);
 
-                    logger.info("Inserted document with id " + indexResponse.getId() +" in the index " + OPENSEARCH_INDEX);
+                    bulkRequest.add(indexRequest);
                 }
+
+                if (bulkRequest.numberOfActions() > 0) {
+                    BulkResponse bulkResponse =  openSearchClient.bulk(bulkRequest, RequestOptions.DEFAULT);
+                    logger.info("Inserted " + bulkResponse.getItems().length + " record(s)");
+                }
+
+                consumer.commitSync();
+                logger.info("Offsets have been committed!");
             }
+
         } catch (IOException e) {
             logger.error("Error while calling opensearch client.", e);
-        } finally {
-            consumer.commitSync();
-
-            logger.info("Offsets have been committed!");
         }
     }
 
