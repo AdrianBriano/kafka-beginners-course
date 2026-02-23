@@ -1,5 +1,6 @@
 package io.conduktor.demos.kafka.opensearch;
 
+import com.google.gson.JsonParser;
 import org.apache.hc.client5.http.auth.AuthScope;
 import org.apache.hc.client5.http.auth.CredentialsStore;
 import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
@@ -91,7 +92,10 @@ public class OpenSearchConsumer {
                 logger.info("Received " + recordCount + " record(s)");
 
                 for (ConsumerRecord<String, String> record: records) {
-                    IndexRequest indexRequest = new IndexRequest(OPENSEARCH_INDEX).source(record.value(), XContentType.JSON);
+
+                    String id  = extractId(record.value());
+
+                    IndexRequest indexRequest = new IndexRequest(OPENSEARCH_INDEX).source(record.value(), XContentType.JSON).id(id);
 
                     IndexResponse indexResponse = createOpenSearchClient().index(indexRequest, RequestOptions.DEFAULT);
 
@@ -101,6 +105,10 @@ public class OpenSearchConsumer {
         } catch (IOException e) {
             logger.error("Error while calling opensearch client.", e);
         }
+    }
+
+    private static String extractId(String value) {
+        return JsonParser.parseString(value).getAsJsonObject().get("meta").getAsJsonObject().get("id").getAsString();
     }
 
     private static KafkaConsumer<String, String> createKafkaConsumer() {
