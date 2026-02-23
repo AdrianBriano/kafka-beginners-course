@@ -104,6 +104,10 @@ public class OpenSearchConsumer {
             }
         } catch (IOException e) {
             logger.error("Error while calling opensearch client.", e);
+        } finally {
+            consumer.commitSync();
+
+            logger.info("Offsets have been committed!");
         }
     }
 
@@ -120,6 +124,7 @@ public class OpenSearchConsumer {
         properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG,groupId);
         properties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,"latest");
+        properties.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,"false");
 
         return new KafkaConsumer<>(properties);
     }
